@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   },
   description: "AI Document Management System with Subscription-Based RBAC, Supabase Auth, Database, Storage, and Stripe Payments.",
   icons: {
-    icon: "/icon.svg",
+    icon: "/icons/icon.svg",
+    shortcut: "/icons/favicon.ico",
   },
 };
 
