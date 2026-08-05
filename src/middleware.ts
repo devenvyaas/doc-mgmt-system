@@ -15,46 +15,53 @@ export async function middleware(request: NextRequest) {
   const { url, anonKey } = getSanitizedSupabaseConfig();
 
   const supabase = createServerClient(url, anonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
 
   // Refresh auth session
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes check
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
+  // Route classifications
+  const isPublicOrAuthRoute =
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register');
+
   const isProtectedRoute =
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/documents') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/admin');
+
   const isAdminRoute = pathname.startsWith('/admin');
 
   let finalResponse = supabaseResponse;
 
-  if (user && isAuthRoute) {
+  // 1. If user IS logged in and attempts to access public landing page / login / register -> Redirect to /dashboard
+  if (user && isPublicOrAuthRoute) {
     finalResponse = NextResponse.redirect(new URL('/dashboard', request.url));
-  } else if (!user && isProtectedRoute) {
-    const url = new URL('/login', request.url);
-    url.searchParams.set('redirectTo', pathname);
-    finalResponse = NextResponse.redirect(url);
-  } else if (user && isAdminRoute) {
+  }
+  // 2. If user IS NOT logged in and attempts to access protected app routes -> Redirect to /
+  else if (!user && isProtectedRoute) {
+    finalResponse = NextResponse.redirect(new URL('/', request.url));
+  }
+  // 3. If user IS logged in and attempts to access admin route -> Verify admin role
+  else if (user && isAdminRoute) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -69,7 +76,7 @@ export async function middleware(request: NextRequest) {
         durationMs: Date.now() - startTime,
         error: 'Forbidden: Non-admin user attempted to access admin route',
       });
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      finalResponse = NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
 
