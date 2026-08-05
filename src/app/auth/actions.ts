@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -31,8 +32,22 @@ export async function loginAction(formData: FormData) {
   });
 
   if (error) {
+    logger.error({
+      method: 'POST',
+      route: '/auth/login',
+      status: 400,
+      error: error.message,
+      details: { email },
+    });
     return { error: error.message };
   }
+
+  logger.info({
+    method: 'POST',
+    route: '/auth/login',
+    status: 200,
+    details: { email },
+  });
 
   redirect('/dashboard');
 }
@@ -62,8 +77,22 @@ export async function registerAction(formData: FormData) {
   });
 
   if (error) {
+    logger.error({
+      method: 'POST',
+      route: '/auth/register',
+      status: 400,
+      error: error.message,
+      details: { email, fullName },
+    });
     return { error: error.message };
   }
+
+  logger.info({
+    method: 'POST',
+    route: '/auth/register',
+    status: 200,
+    details: { email, fullName, hasSession: !!data.session },
+  });
 
   if (!data.session) {
     return {

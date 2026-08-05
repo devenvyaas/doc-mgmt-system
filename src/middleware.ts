@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
+import { getSanitizedSupabaseConfig } from '@/lib/supabase/config';
 
 export async function middleware(request: NextRequest) {
   const startTime = Date.now();
@@ -11,10 +12,9 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
-  const supabase = createServerClient(
-    (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/+$/, ''),
-    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim(),
-    {
+  const { url, anonKey } = getSanitizedSupabaseConfig();
+
+  const supabase = createServerClient(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();

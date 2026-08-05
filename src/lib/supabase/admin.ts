@@ -1,14 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
+import { getSanitizedSupabaseConfig } from './config';
 
 export function createAdminClient() {
-  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/+$/, '');
-  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const { url, serviceKey } = getSanitizedSupabaseConfig();
 
-  if (!serviceRoleKey) {
+  if (!serviceKey) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is missing.');
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  return createClient(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
