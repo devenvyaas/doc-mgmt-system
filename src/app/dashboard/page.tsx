@@ -25,6 +25,8 @@ import {
   FileCode,
   Image as ImageIcon,
   FolderOpen,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export default function UserDashboard() {
@@ -34,6 +36,12 @@ export default function UserDashboard() {
   const [fetchingDocs, setFetchingDocs] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  // Pagination State (10 items per page)
+  const [page, setPage] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const limit = 10;
 
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
@@ -93,11 +101,13 @@ export default function UserDashboard() {
     };
   }, [supabase]);
 
-  // Server-side Search & Category Filtering API Fetch
-  const fetchDocuments = useCallback(async (search: string, cat: string) => {
+  // Server-side Search, Category Filtering & 10-item Pagination API Fetch
+  const fetchDocuments = useCallback(async (search: string, cat: string, pageNum: number) => {
     setFetchingDocs(true);
     try {
       const params = new URLSearchParams();
+      params.set('page', pageNum.toString());
+      params.set('limit', limit.toString());
       if (search.trim()) params.set('search', search.trim());
       if (cat && cat !== 'All') params.set('category', cat);
 
@@ -106,6 +116,8 @@ export default function UserDashboard() {
 
       if (res.ok && data.documents) {
         setDocuments(data.documents);
+        setTotalCount(data.totalCount || 0);
+        setTotalPages(data.totalPages || 1);
       } else {
         console.error('Failed to fetch documents from server API:', data.error);
       }
@@ -116,13 +128,13 @@ export default function UserDashboard() {
     }
   }, []);
 
-  // Debounced API fetch when search query or category changes
+  // Fetch documents whenever search, category, or page changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchDocuments(searchQuery, selectedCategory);
+      fetchDocuments(searchQuery, selectedCategory, page);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedCategory, fetchDocuments]);
+  }, [searchQuery, selectedCategory, page, fetchDocuments]);
 
   const refreshProfile = useCallback(async () => {
     const {
@@ -175,7 +187,7 @@ export default function UserDashboard() {
         setTitle('');
         setDescription('');
         setCategory('General');
-        fetchDocuments(searchQuery, selectedCategory);
+        fetchDocuments(searchQuery, selectedCategory, page);
         refreshProfile();
 
         setTimeout(() => {
@@ -216,7 +228,7 @@ export default function UserDashboard() {
         setEditError(data.error || 'Failed to update document');
       } else {
         setEditingDoc(null);
-        fetchDocuments(searchQuery, selectedCategory);
+        fetchDocuments(searchQuery, selectedCategory, page);
       }
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Update failed');
@@ -263,7 +275,7 @@ export default function UserDashboard() {
       });
 
       if (res.ok) {
-        fetchDocuments(searchQuery, selectedCategory);
+        fetchDocuments(searchQuery, selectedCategory, page);
         refreshProfile();
       } else {
         const data = await res.json();
@@ -295,9 +307,8 @@ export default function UserDashboard() {
   }
 
   const isPro = profile?.subscription_tier === 'pro';
-  const totalUploaded = documents.length;
-  const remainingLimit = isPro ? 'Unlimited' : Math.max(0, 5 - totalUploaded);
-  const isUploadDisabled = !isPro && totalUploaded >= 5;
+  const remainingLimit = isPro ? 'Unlimited' : Math.max(0, 5 - totalCount);
+  const isUploadDisabled = !isPro && totalCount >= 5;
 
   function getFileIcon(type: string) {
     if (type.includes('pdf')) return <FileText className="w-5 h-5 text-red-400" />;
@@ -314,6 +325,9 @@ export default function UserDashboard() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
+
+  const startRange = totalCount === 0 ? 0 : (page - 1) * limit + 1;
+  const endRange = Math.min(page * limit, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -353,7 +367,7 @@ export default function UserDashboard() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Total Uploaded
               </p>
-              <h3 className="text-3xl font-extrabold text-white mt-1">{totalUploaded}</h3>
+              <h3 className="text-3xl font-extrabold text-white mt-1">{totalCount}</h3>
               <p className="text-xs text-slate-500 mt-1">Stored documents</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -428,7 +442,10 @@ export default function UserDashboard() {
               type="text"
               placeholder="Search documents by title..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 transition"
             />
           </div>
@@ -438,7 +455,10 @@ export default function UserDashboard() {
             {['All', 'General', 'Work', 'Personal', 'Finance', 'Legal'].map((cat) => (
               <button
                 key={cat}
-                onClick={() => setSelectedCategory(cat)}
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  setPage(1);
+                }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0 ${
                   selectedCategory === cat
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
@@ -452,7 +472,7 @@ export default function UserDashboard() {
         </div>
 
         {/* Documents Vault Table / Grid */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl backdrop-blur-xl shadow-xl overflow-hidden min-h-[250px]">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl backdrop-blur-xl shadow-xl overflow-hidden min-h-[250px] flex flex-col justify-between">
           {loading || fetchingDocs ? (
             <div className="py-20 flex flex-col items-center justify-center text-slate-500 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -471,116 +491,151 @@ export default function UserDashboard() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-950/60 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4">Document</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4">File Size</th>
-                    <th className="px-6 py-4">Uploaded</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {documents.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
-                            {getFileIcon(doc.file_type)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-100 text-sm line-clamp-1">
-                              {doc.title}
-                            </p>
-                            {doc.description && (
-                              <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                                {doc.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                          {doc.category}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4 font-mono text-xs text-slate-400">
-                        {formatBytes(doc.file_size)}
-                      </td>
-
-                      <td className="px-6 py-4 text-xs text-slate-400">
-                        {new Date(doc.created_at).toLocaleDateString()}
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Dedicated View Button (Eye Icon - Opens Inline in New Tab) */}
-                          <button
-                            onClick={() => handleDocumentAction(doc.id, 'view')}
-                            disabled={actionState === `${doc.id}-view`}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 hover:border-indigo-500/30 transition disabled:opacity-50"
-                            title="View Document in New Tab"
-                          >
-                            {actionState === `${doc.id}-view` ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                            ) : (
-                              <Eye className="w-4 h-4" />
-                            )}
-                          </button>
-
-                          {/* Dedicated Download Button (Exact DB Title Filename) */}
-                          <button
-                            onClick={() => handleDocumentAction(doc.id, 'download')}
-                            disabled={actionState === `${doc.id}-download`}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 hover:border-blue-500/30 transition disabled:opacity-50"
-                            title="Download Document"
-                          >
-                            {actionState === `${doc.id}-download` ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                            ) : (
-                              <Download className="w-4 h-4" />
-                            )}
-                          </button>
-
-                          {/* Edit Details Button (Pencil Icon) */}
-                          <button
-                            onClick={() => {
-                              setEditingDoc(doc);
-                              setEditTitle(doc.title);
-                              setEditDescription(doc.description || '');
-                              setEditCategory(doc.category || 'General');
-                            }}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-amber-400 hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/30 transition"
-                            title="Edit Document Details"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => handleDelete(doc.id)}
-                            disabled={deletingId === doc.id}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 transition"
-                            title="Delete Document"
-                          >
-                            {deletingId === doc.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-red-400" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-950/60 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th className="px-6 py-4">Document</th>
+                      <th className="px-6 py-4">Category</th>
+                      <th className="px-6 py-4">File Size</th>
+                      <th className="px-6 py-4">Uploaded</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {documents.map((doc) => (
+                      <tr key={doc.id} className="hover:bg-slate-800/40 transition">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+                              {getFileIcon(doc.file_type)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-100 text-sm line-clamp-1">
+                                {doc.title}
+                              </p>
+                              {doc.description && (
+                                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                                  {doc.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                            {doc.category}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4 font-mono text-xs text-slate-400">
+                          {formatBytes(doc.file_size)}
+                        </td>
+
+                        <td className="px-6 py-4 text-xs text-slate-400">
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </td>
+
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* Dedicated View Button (Eye Icon - Opens Inline in New Tab) */}
+                            <button
+                              onClick={() => handleDocumentAction(doc.id, 'view')}
+                              disabled={actionState === `${doc.id}-view`}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 hover:border-indigo-500/30 transition disabled:opacity-50"
+                              title="View Document in New Tab"
+                            >
+                              {actionState === `${doc.id}-view` ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
+                            </button>
+
+                            {/* Dedicated Download Button (Exact DB Title Filename) */}
+                            <button
+                              onClick={() => handleDocumentAction(doc.id, 'download')}
+                              disabled={actionState === `${doc.id}-download`}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 hover:border-blue-500/30 transition disabled:opacity-50"
+                              title="Download Document"
+                            >
+                              {actionState === `${doc.id}-download` ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                            </button>
+
+                            {/* Edit Details Button (Pencil Icon) */}
+                            <button
+                              onClick={() => {
+                                setEditingDoc(doc);
+                                setEditTitle(doc.title);
+                                setEditDescription(doc.description || '');
+                                setEditCategory(doc.category || 'General');
+                              }}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-amber-400 hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/30 transition"
+                              title="Edit Document Details"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              onClick={() => handleDelete(doc.id)}
+                              disabled={deletingId === doc.id}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 transition"
+                              title="Delete Document"
+                            >
+                              {deletingId === doc.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Server-Side Pagination Bar (10 documents per page) */}
+              <div className="px-6 py-4 bg-slate-950/40 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                <div>
+                  Showing <span className="font-semibold text-slate-200">{startRange}</span> -{' '}
+                  <span className="font-semibold text-slate-200">{endRange}</span> of{' '}
+                  <span className="font-semibold text-slate-200">{totalCount}</span> documents
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                    className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 transition"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <span className="px-3 py-1 rounded-lg bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-medium">
+                    Page {page} of {totalPages || 1}
+                  </span>
+
+                  <button
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={page >= totalPages}
+                    className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 transition"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </main>

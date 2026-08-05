@@ -62,7 +62,7 @@ export default function LandingPage() {
             href="/register"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold shadow-xl shadow-indigo-600/30 transition text-sm"
           >
-            <span>Start Free Trial</span>
+            <span>Create Free Account</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
