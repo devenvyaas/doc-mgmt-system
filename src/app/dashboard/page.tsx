@@ -451,7 +451,7 @@ export default function UserDashboard() {
         </div>
 
         {/* Documents Vault Table / Grid */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl backdrop-blur-xl shadow-xl overflow-hidden min-h-[300px] flex flex-col justify-center">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl backdrop-blur-xl shadow-xl overflow-hidden min-h-[250px]">
           {loading || fetchingDocs ? (
             <div className="py-20 flex flex-col items-center justify-center text-slate-500 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
