@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import { createClient } from '@/lib/supabase/client';
+import { getOrEnsureProfile } from '@/lib/supabase/profile';
 import { Profile } from '@/lib/types';
 import {
   User,
@@ -13,6 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
   CreditCard,
+  Shield,
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -37,15 +39,16 @@ export default function ProfilePage() {
         return;
       }
 
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const prof = await getOrEnsureProfile(
+        supabase,
+        user.id,
+        user.email || '',
+        user.user_metadata?.full_name
+      );
 
       if (isMounted) {
         if (prof) {
-          setProfile(prof as Profile);
+          setProfile(prof);
           setFullName(prof.full_name || '');
         }
         setLoading(false);
@@ -98,8 +101,8 @@ export default function ProfilePage() {
     }
   }
 
-
   const isPro = profile?.subscription_tier === 'pro';
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -134,15 +137,22 @@ export default function ProfilePage() {
               <div className="mt-6 w-full space-y-3 pt-6 border-t border-slate-800 text-left">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">Assigned Role:</span>
-                  <span className="font-semibold uppercase px-2 py-0.5 rounded bg-slate-800 text-indigo-400 border border-slate-700">
-                    {profile?.role}
-                  </span>
+                  {isAdmin ? (
+                    <span className="font-bold uppercase px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                      <Shield className="w-3 h-3 text-purple-400" />
+                      ADMIN
+                    </span>
+                  ) : (
+                    <span className="font-semibold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      USER
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">Subscription Tier:</span>
                   {isPro ? (
-                    <span className="font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <span className="font-bold px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                       <Zap className="w-3 h-3 fill-amber-400" />
                       PRO
                     </span>

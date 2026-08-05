@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import { createClient } from '@/lib/supabase/client';
+import { getOrEnsureProfile } from '@/lib/supabase/profile';
 import { Profile, Document } from '@/lib/types';
 import {
   FileText,
@@ -60,11 +61,12 @@ export default function UserDashboard() {
         return;
       }
 
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const prof = await getOrEnsureProfile(
+        supabase,
+        user.id,
+        user.email || '',
+        user.user_metadata?.full_name
+      );
 
       const { data: docs } = await supabase
         .from('documents')
@@ -73,7 +75,7 @@ export default function UserDashboard() {
         .order('created_at', { ascending: false });
 
       if (isMounted) {
-        if (prof) setProfile(prof as Profile);
+        if (prof) setProfile(prof);
         if (docs) setDocuments(docs as Document[]);
         setLoading(false);
       }

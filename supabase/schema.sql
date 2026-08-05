@@ -28,7 +28,19 @@ create table if not exists public.documents (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 3. Automatic Profile Creation Trigger on Signup
+-- 3. Security Definer Helper Function to Prevent RLS Infinite Recursion
+create or replace function public.is_admin(user_id uuid)
+returns boolean
+language sql
+security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = user_id and role = 'admin'
+  );
+$$;
+
+-- 4. Automatic Profile Creation Trigger on Signup
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -42,7 +54,10 @@ begin
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     'user',
     'free'
-  );
+  )
+  on conflict (id) do update set
+    email = excluded.email,
+    updated_at = now();
   return new;
 end;
 $$;
@@ -53,37 +68,36 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- 4. Enable Row Level Security (RLS)
+-- 5. Enable Row Level Security (RLS)
 alter table public.profiles enable row level security;
 alter table public.documents enable row level security;
 
--- 5. Profiles RLS Policies
+-- Drop existing policies if re-running
+drop policy if exists "Users can view own profile or admins view all" on public.profiles;
+drop policy if exists "Users can update own profile or admins update any" on public.profiles;
+drop policy if exists "Users can view own documents or admins view all" on public.documents;
+drop policy if exists "Users can insert own documents" on public.documents;
+drop policy if exists "Users can update own documents or admins update any" on public.documents;
+drop policy if exists "Users can delete own documents or admins delete any" on public.documents;
+
+-- 6. Profiles RLS Policies (Using is_admin to prevent RLS recursion)
 create policy "Users can view own profile or admins view all"
   on public.profiles for select
   using (
-    auth.uid() = id or 
-    exists (
-      select 1 from public.profiles where id = auth.uid() and role = 'admin'
-    )
+    auth.uid() = id or public.is_admin(auth.uid())
   );
 
 create policy "Users can update own profile or admins update any"
   on public.profiles for update
   using (
-    auth.uid() = id or 
-    exists (
-      select 1 from public.profiles where id = auth.uid() and role = 'admin'
-    )
+    auth.uid() = id or public.is_admin(auth.uid())
   );
 
--- 6. Documents RLS Policies
+-- 7. Documents RLS Policies
 create policy "Users can view own documents or admins view all"
   on public.documents for select
   using (
-    uploaded_by = auth.uid() or 
-    exists (
-      select 1 from public.profiles where id = auth.uid() and role = 'admin'
-    )
+    uploaded_by = auth.uid() or public.is_admin(auth.uid())
   );
 
 create policy "Users can insert own documents"
@@ -95,27 +109,25 @@ create policy "Users can insert own documents"
 create policy "Users can update own documents or admins update any"
   on public.documents for update
   using (
-    uploaded_by = auth.uid() or 
-    exists (
-      select 1 from public.profiles where id = auth.uid() and role = 'admin'
-    )
+    uploaded_by = auth.uid() or public.is_admin(auth.uid())
   );
 
 create policy "Users can delete own documents or admins delete any"
   on public.documents for delete
   using (
-    uploaded_by = auth.uid() or 
-    exists (
-      select 1 from public.profiles where id = auth.uid() and role = 'admin'
-    )
+    uploaded_by = auth.uid() or public.is_admin(auth.uid())
   );
 
--- 7. Supabase Storage Bucket Setup
+-- 8. Supabase Storage Bucket Setup
 insert into storage.buckets (id, name, public)
 values ('documents', 'documents', false)
 on conflict (id) do nothing;
 
 -- Storage RLS Policies
+drop policy if exists "Authenticated users can upload documents to storage" on storage.objects;
+drop policy if exists "Users can read own storage objects or admins read all" on storage.objects;
+drop policy if exists "Users can delete own storage objects or admins delete any" on storage.objects;
+
 create policy "Authenticated users can upload documents to storage"
   on storage.objects for insert
   with check (
@@ -128,7 +140,7 @@ create policy "Users can read own storage objects or admins read all"
   using (
     bucket_id = 'documents' and (
       (storage.foldername(name))[1] = auth.uid()::text or
-      exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+      public.is_admin(auth.uid())
     )
   );
 
@@ -137,6 +149,6 @@ create policy "Users can delete own storage objects or admins delete any"
   using (
     bucket_id = 'documents' and (
       (storage.foldername(name))[1] = auth.uid()::text or
-      exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+      public.is_admin(auth.uid())
     )
   );

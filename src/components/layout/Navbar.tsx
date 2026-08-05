@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { logoutAction } from '@/app/auth/actions';
 import { createClient } from '@/lib/supabase/client';
+import { getOrEnsureProfile } from '@/lib/supabase/profile';
 import { Profile } from '@/lib/types';
 import {
   FileText,
@@ -57,14 +58,15 @@ export default function Navbar({ profile: initialProfile }: NavbarProps) {
         setUserEmail(user.email || null);
       }
 
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const prof = await getOrEnsureProfile(
+        supabase,
+        user.id,
+        user.email || '',
+        user.user_metadata?.full_name
+      );
 
       if (isMounted) {
-        if (prof) setProfile(prof as Profile);
+        if (prof) setProfile(prof);
         setLoading(false);
       }
     }
