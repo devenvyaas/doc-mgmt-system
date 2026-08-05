@@ -26,7 +26,7 @@ export async function loginAction(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email,
+    email: email.trim(),
     password,
   });
 
@@ -48,10 +48,13 @@ export async function registerAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
-    email,
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
     password,
     options: {
+      emailRedirectTo: `${appUrl}/dashboard`,
       data: {
         full_name: fullName,
       },
@@ -60,6 +63,12 @@ export async function registerAction(formData: FormData) {
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (!data.session) {
+    return {
+      success: 'Account created! If email confirmation is enabled in your Supabase project, please check your inbox to confirm.',
+    };
   }
 
   redirect('/dashboard');

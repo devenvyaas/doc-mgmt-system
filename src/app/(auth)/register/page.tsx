@@ -3,15 +3,17 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { registerAction } from '@/app/auth/actions';
-import { UserPlus, User, Mail, Lock, ShieldCheck, Loader2 } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, ShieldCheck, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
@@ -19,6 +21,9 @@ export default function RegisterPage() {
 
     if (result?.error) {
       setError(result.error);
+      setLoading(false);
+    } else if (result?.success) {
+      setSuccessMessage(result.success);
       setLoading(false);
     }
   }
@@ -43,8 +48,15 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2 animate-shake">
+          <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
             <span>{error}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>{successMessage}</span>
           </div>
         )}
 
