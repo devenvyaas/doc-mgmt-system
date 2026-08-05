@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { logoutAction } from '@/app/auth/actions';
+import { createClient } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 import {
   FileText,
@@ -12,14 +13,70 @@ import {
   Zap,
   LogOut,
   LayoutDashboard,
+  Loader2,
 } from 'lucide-react';
 
 interface NavbarProps {
-  profile: Profile | null;
+  profile?: Profile | null;
 }
 
-export default function Navbar({ profile }: NavbarProps) {
+export default function Navbar({ profile: initialProfile }: NavbarProps) {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<Profile | null>(initialProfile || null);
+  const [loading, setLoading] = useState<boolean>(!initialProfile);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const isProtectedRoute =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/documents') ||
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/admin');
+
+  useEffect(() => {
+    if (initialProfile) {
+      return;
+    }
+
+    let isMounted = true;
+    const supabase = createClient();
+
+    async function loadUserSession() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        if (isMounted) {
+          setProfile(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setUserEmail(user.email || null);
+      }
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (isMounted) {
+        if (prof) setProfile(prof as Profile);
+        setLoading(false);
+      }
+    }
+
+    loadUserSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [initialProfile]);
+
+  const activeProfile = initialProfile || profile;
+  const isAuthenticated = !!activeProfile || !!userEmail || isProtectedRoute;
 
   return (
     <header className="sticky top-0 z-40 w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
@@ -36,7 +93,7 @@ export default function Navbar({ profile }: NavbarProps) {
           </Link>
 
           {/* Navigation Links */}
-          {profile && (
+          {isAuthenticated && (
             <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
               <Link
                 href="/dashboard"
@@ -50,7 +107,7 @@ export default function Navbar({ profile }: NavbarProps) {
                 <span>Dashboard</span>
               </Link>
 
-              {profile.role === 'admin' && (
+              {activeProfile?.role === 'admin' && (
                 <Link
                   href="/admin/dashboard"
                   className={`px-3 py-1.5 rounded-lg flex items-center gap-2 transition ${
@@ -67,11 +124,11 @@ export default function Navbar({ profile }: NavbarProps) {
           )}
         </div>
 
-        {/* User Profile & Actions */}
-        {profile ? (
+        {/* Right Action Bar */}
+        {isAuthenticated ? (
           <div className="flex items-center gap-3">
             {/* Subscription Tier Badge */}
-            {profile.subscription_tier === 'pro' ? (
+            {activeProfile?.subscription_tier === 'pro' ? (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border border-amber-500/30 shadow-sm">
                 <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                 PRO
@@ -82,14 +139,14 @@ export default function Navbar({ profile }: NavbarProps) {
               </span>
             )}
 
-            {/* User Role Badge */}
-            {profile.role === 'admin' && (
+            {/* Admin Role Badge */}
+            {activeProfile?.role === 'admin' && (
               <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
                 ADMIN
               </span>
             )}
 
-            {/* Profile Dropdown / Link */}
+            {/* User Profile Link */}
             <Link
               href="/profile"
               className={`p-2 rounded-xl border flex items-center gap-2 text-sm transition ${
@@ -101,7 +158,7 @@ export default function Navbar({ profile }: NavbarProps) {
             >
               <User className="w-4 h-4 text-slate-400" />
               <span className="hidden lg:inline text-xs font-medium max-w-[120px] truncate">
-                {profile.full_name || profile.email}
+                {activeProfile?.full_name || activeProfile?.email || userEmail || 'Account'}
               </span>
             </Link>
 
@@ -115,6 +172,10 @@ export default function Navbar({ profile }: NavbarProps) {
                 <LogOut className="w-4 h-4" />
               </button>
             </form>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
           </div>
         ) : (
           <div className="flex items-center gap-3">
