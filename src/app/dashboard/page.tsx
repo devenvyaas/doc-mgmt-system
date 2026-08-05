@@ -51,7 +51,7 @@ export default function UserDashboard() {
 
   // Action States
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<string | null>(null);
   const [stripeLoading, setStripeLoading] = useState<boolean>(false);
 
   // Form State
@@ -227,7 +227,8 @@ export default function UserDashboard() {
 
   // Open Document in New Tab (View Mode) or Direct Download (Download Mode)
   async function handleDocumentAction(docId: string, mode: 'view' | 'download') {
-    setActionId(docId);
+    const actionKey = `${docId}-${mode}`;
+    setActionState(actionKey);
     try {
       const res = await fetch(`/api/documents/${docId}/download?mode=${mode}`);
       const data = await res.json();
@@ -247,7 +248,7 @@ export default function UserDashboard() {
     } catch {
       alert('Error connecting to download server');
     } finally {
-      setActionId(null);
+      setActionState(null);
     }
   }
 
@@ -521,11 +522,11 @@ export default function UserDashboard() {
                           {/* Dedicated View Button (Eye Icon - Opens Inline in New Tab) */}
                           <button
                             onClick={() => handleDocumentAction(doc.id, 'view')}
-                            disabled={actionId === doc.id}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 hover:border-indigo-500/30 transition"
+                            disabled={actionState === `${doc.id}-view`}
+                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 hover:border-indigo-500/30 transition disabled:opacity-50"
                             title="View Document in New Tab"
                           >
-                            {actionId === doc.id ? (
+                            {actionState === `${doc.id}-view` ? (
                               <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
                             ) : (
                               <Eye className="w-4 h-4" />
@@ -535,11 +536,11 @@ export default function UserDashboard() {
                           {/* Dedicated Download Button (Exact DB Title Filename) */}
                           <button
                             onClick={() => handleDocumentAction(doc.id, 'download')}
-                            disabled={actionId === doc.id}
-                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 hover:border-blue-500/30 transition"
+                            disabled={actionState === `${doc.id}-download`}
+                            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 hover:border-blue-500/30 transition disabled:opacity-50"
                             title="Download Document"
                           >
-                            {actionId === doc.id ? (
+                            {actionState === `${doc.id}-download` ? (
                               <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
                             ) : (
                               <Download className="w-4 h-4" />

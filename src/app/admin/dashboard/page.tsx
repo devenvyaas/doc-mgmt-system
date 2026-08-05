@@ -167,7 +167,8 @@ export default function AdminDashboard() {
 
   // Open Document View / Download Actions
   async function handleDocumentAction(docId: string, mode: 'view' | 'download') {
-    setActionLoading(docId);
+    const actionKey = `${docId}-${mode}`;
+    setActionLoading(actionKey);
     try {
       const res = await fetch(`/api/documents/${docId}/download?mode=${mode}`);
       const data = await res.json();
@@ -560,21 +561,29 @@ export default function AdminDashboard() {
                             {/* Dedicated Eye Icon (View in New Tab) */}
                             <button
                               onClick={() => handleDocumentAction(doc.id, 'view')}
-                              disabled={actionLoading === doc.id}
-                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 transition"
+                              disabled={actionLoading === `${doc.id}-view`}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-indigo-400 hover:bg-indigo-500/10 border border-slate-700 transition disabled:opacity-50"
                               title="View Document in New Tab"
                             >
-                              <Eye className="w-4 h-4" />
+                              {actionLoading === `${doc.id}-view` ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
                             </button>
 
                             {/* Dedicated Download Icon (Exact DB Title Filename) */}
                             <button
                               onClick={() => handleDocumentAction(doc.id, 'download')}
-                              disabled={actionLoading === doc.id}
-                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 transition"
+                              disabled={actionLoading === `${doc.id}-download`}
+                              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-700 transition disabled:opacity-50"
                               title="Download Document"
                             >
-                              <Download className="w-4 h-4" />
+                              {actionLoading === `${doc.id}-download` ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
                             </button>
 
                             {/* Edit Document Pencil Button */}
