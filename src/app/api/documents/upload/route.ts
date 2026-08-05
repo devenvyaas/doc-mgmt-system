@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 
+export const maxDuration = 60; // 60 seconds timeout for large file uploads up to 100MB
+
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -48,8 +50,19 @@ export async function POST(request: NextRequest) {
 
     const isPro = profile.subscription_tier === 'pro';
 
-    // 3. Parse Form Data
-    const formData = await request.formData();
+    // 3. Parse Form Data (Up to 100MB)
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (parseErr) {
+      const parseMessage = parseErr instanceof Error ? parseErr.message : 'Failed to parse form data';
+      logger.error({ method: 'POST', route, status: 400, durationMs: Date.now() - startTime, error: `Body parse error: ${parseMessage}` });
+      return NextResponse.json(
+        { error: 'File upload exceeds server limits or stream was interrupted. Please ensure file is within your plan limits.' },
+        { status: 400 }
+      );
+    }
+
     const file = formData.get('file') as File | null;
     const title = formData.get('title') as string | null;
     const description = (formData.get('description') as string | null) || '';
@@ -77,7 +90,7 @@ export async function POST(request: NextRequest) {
     const maxSize = isPro ? MAX_SIZE_PRO : MAX_SIZE_FREE;
     if (file.size > maxSize) {
       const maxMb = isPro ? 100 : 10;
-      const errMsg = `File size exceeds your ${profile.subscription_tier.toUpperCase()} plan limit of ${maxMb} MB.`;
+      const errMsg = `File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds your ${profile.subscription_tier.toUpperCase()} plan limit of ${maxMb} MB.`;
       logger.error({ method: 'POST', route, status: 400, durationMs: Date.now() - startTime, error: errMsg });
       return NextResponse.json(
         { error: errMsg },
